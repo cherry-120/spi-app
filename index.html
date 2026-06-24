@@ -3,17 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SPI言語 4択クイズ（モード選択機能付き）</title>
+    <title>SPI言語 4択クイズ（途中終了機能付き）</title>
     <style>
         body { font-family: 'Helvetica Neue', Arial, sans-serif; background-color: #f5f6fa; color: #333; padding: 20px; display: flex; justify-content: center; }
         .quiz-container { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); max-width: 500px; width: 100%; }
         h1 { font-size: 1.2rem; color: #4a5568; border-left: 5px solid #3182ce; padding-left: 10px; margin-bottom: 20px; }
         
-        /* 画面切り替え用 */
         .screen { display: none; }
         .screen.active { display: block; }
 
-        /* スタート画面用 */
+        /* スタート画面 */
         .select-box { margin: 20px 0; }
         .select-box label { display: block; margin-bottom: 10px; font-weight: bold; }
         .select-dropdown { width: 100%; padding: 10px; border-radius: 6px; border: 1px solid #cbd5e0; font-size: 1rem; }
@@ -21,8 +20,14 @@
         .start-btn { display: block; width: 100%; padding: 15px; background-color: #48bb78; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 1.1rem; font-weight: bold; text-align: center; margin-top: 25px; }
         .start-btn:hover { background-color: #38a169; }
 
-        /* クイズ画面用 */
-        .progress-bar { font-size: 0.9rem; color: #718096; margin-bottom: 15px; font-weight: bold; }
+        /* クイズ画面 */
+        .quiz-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
+        .progress-bar { font-size: 0.9rem; color: #718096; font-weight: bold; }
+        
+        /* 💡 途中終了ボタン用のスタイル */
+        .quit-btn { background-color: #f7fafc; border: 1px solid #e2e8f0; color: #a0aec0; padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 0.8rem; font-weight: bold; transition: all 0.2s; }
+        .quit-btn:hover { background-color: #edf2f7; color: #e53e3e; border-color: #fed7d7; }
+
         .question-box { background: #ebf8ff; border: 1px solid #bee3f8; padding: 15px; border-radius: 8px; font-weight: bold; margin-bottom: 15px; line-height: 1.5; }
         .check-btn-box { text-align: right; margin-bottom: 15px; }
         .check-toggle-btn { background: #edf2f7; border: 1px solid #cbd5e0; padding: 6px 12px; border-radius: 20px; cursor: pointer; font-size: 0.85rem; font-weight: bold; transition: all 0.2s; }
@@ -34,6 +39,12 @@
         .incorrect { background-color: #fed7d7; color: #742a2a; }
         .next-btn { display: block; width: 100%; padding: 12px; margin-top: 20px; background-color: #3182ce; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 1rem; font-weight: bold; text-align: center; }
         .next-btn:hover { background-color: #2b6cb0; }
+
+        /* リザルト画面 */
+        .score-box { text-align: center; padding: 20px; background: #f0fff4; border: 2px dashed #48bb78; border-radius: 8px; margin: 20px 0; }
+        .score-num { font-size: 2rem; color: #2f855a; font-weight: bold; margin: 10px 0; }
+        .back-btn { display: block; width: 100%; padding: 12px; background-color: #718096; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 1rem; font-weight: bold; text-align: center; }
+        .back-btn:hover { background-color: #4a5568; }
     </style>
 </head>
 <body>
@@ -56,188 +67,71 @@
     </div>
 
     <div id="quiz-screen" class="screen">
-        <div id="progress" class="progress-bar">第 1 / 10 問</div>
-
-        <div id="question" class="question-box">問題がここに表示されます</div>
+        <div class="quiz-header">
+            <div id="progress" class="progress-bar">第 1 / 10 問</div>
+            <button class="quit-btn" onclick="quitQuiz()">🏳️ 途中でやめる</button>
+        </div>
         
+        <div id="question" class="question-box">問題がここに表示されます</div>
         <div class="check-btn-box">
             <button id="bookmark-btn" class="check-toggle-btn" onclick="toggleBookmark()">🔖 この問題をチェックする</button>
         </div>
-
         <div id="choices"></div>
         <div id="result" class="result"></div>
         <button id="next-btn" class="next-btn" style="display: none;" onclick="nextQuestion()">次の問題へ</button>
     </div>
+
+    <div id="result-screen" class="screen">
+        <div class="score-box">
+            <div>🎉 テスト終了！あなたのスコアは…</div>
+            <div id="final-score" class="score-num">0 / 10 問</div>
+            <div id="score-comment" style="font-weight: bold; color: #4a5568;">お疲れ様でした！</div>
+        </div>
+        <button class="back-btn" onclick="goToStart()">トップに戻る</button>
+    </div>
 </div>
 
 <script>
-// 問題データ（※実際のアプリにする時は、ここに単語を20、30個と増やしていけます！）
-const spiData = {
-    "宮々（えいえい）": "せっせと休みなく励むこと。",
-    "重畳（ちょうじょう）": "大変喜ばしいこと。良いことが重なること。",
-    "溜飲（りゅういん）": "胃の不調による胸焼け。不満が解消されて気が晴れること。",
-    "言質（げんち）": "のちの証拠となる言葉。約束の言葉。",
-    "気鋭（きえい）": "気力があって、意気込みが鋭いこと。",
-    "腐心（ふしん）": "心を悩ますこと。ひどく心を使うこと。",
-    "鳥瞰（ちょうかん）": "高い所から広い範囲を見下ろし眺めること。全体を一目で観察すること。",
-    "肝要（かんよう）": "非常に大切なこと。最も必要なこと。",
-    "協議（きょうぎ）": "集まって相談すること。",
-    "専横（せんおう）": "わがままで横暴な振る舞い・態度。好き勝手に振る舞うこと。",
-    "遁走（とんそう）": "逃げ出すこと。逃げ去ること。",
-    "暁通（ぎょうつう）": "よく知っていること。精通していること。",
-    "軋轢（あつれき）": "仲が悪くなること。あい争うこと。",
-    "気概（きがい）": "困難にくじけない強い意志・気性。",
-    "度量（どりょう）": "心の広さ。度量が広く小事にこだわらないさま。",
-    "英断（えいだん）": "きっぱりと事を決めること。優れた決断。",
-    "機知（きち）": "その場に応じて、とっさに適切な発言ができるような鋭い才知。",
-    "断腸（だんちょう）": "はらわたがちぎれるほど、悲しくつらいこと。",
-    "懐柔（かいじゅう）": "相手を手なずけるなどして、自分の思い通りに事を運ぶこと。",
-    "至言（しげん）": "事物の本質を適切に言い当てている言葉。いかにも正しい言葉。",
-    "懸案（けんあん）": "長らく解決しないままとなっている問題。",
-    "粗忽（そこつ）": "軽はずみなこと。不注意なために引き起こしたあやまち。",
-    "一瞥（いちべつ）": "ちらっと見ること。ちょっとだけ見ること。",
-    "進取（しんしゅ）": "みずから進んで物事に取り組むこと。自ら進んでなすこと。",
-    "薫陶（くんとう）": "徳の力で人を感化し、教育すること。",
-    "委細（いさい）": "細かく詳しいこと。",
-    "詭弁（きべん）": "道理に合わないことを強引に正当化しようとする弁論。こじつけ・ごまかしの議論。",
-    "克明（こくめい）": "細かいところまで念を入れて手落ちのないこと。まじめで正直なこと。",
-    "大綱（おおづな）": "ある事柄の根本となるもの。大づかみにとらえた内容。",
-    "齟齬（そご）": "物事がうまくかみ合わないこと。食い違うこと。",
-    "邂逅（かいこう）": "思いがけなく会うこと。",
-    "逡巡（しゅんじゅん）": "決断をためらうこと。",
-    "諫言（かんげん）": "目上の者をいさめること。",
-    "箴言（しんげん）": "戒めの言葉。教訓。",
-    "狡猾（こうかつ）": "悪賢いこと。",
-    "桎梏（しっこく）": "手かせ足かせ。人の行動を厳しく制限して自由を束縛するもの。",
-    "昵懇（じっこん）": "間柄が親しいこと。親しくつきあう間柄。",
-    "揶揄（やゆ）": "からかうこと。",
-    "慟哭（どうこく）": "声を上げて激しく泣くこと。",
-    "已然（いぜん）": "すでに起こっていること。",
-    "奸智（かんち）": "ずる賢い知恵。",
-    "阿責（かしゃく）": "叱り責めること。責め苛むこと。",
-    "僭越（せんえつ）": "自分の身分や立場を超えて出過ぎたことをすること。",
-    "僥倖（ぎょうこう）": "思いがけない幸運。",
-    "傀儡（かいらい）": "操り人形。人の手先で使われる人。",
-    "論う（あげつらう）": "些細な非などを取り立てて大げさに言う。",
-    "憐憫（れんびん）": "不憫に思うこと。憐みの気持ち。",
-    "廉価（れんか）": "安いこと。価格が安いさま。",
-    "励行（れいこう）": "努力してそうする。約束や決めを破らぬよう努める。",
-    "領袖（りょうしゅう）": "集団におけるリーダー。集団のかしら、人を率いる長。",
-    "落成（らくせい）": "建築物が出来上がること。",
-    "落伍（らくご）": "仲間・集団の列から遅れること。集団から遅れてついていけなくなること。",
-    "来歴（らいれき）": "物事のこれまでの次第。",
-    "雄飛（ゆうひ）": "勢い盛んに活動すること。活躍すること。",
-    "悠然（ゆうぜん）": "落ち着いていて、少しもあわてないさま。",
-    "躍如（やくじょ）": "生き生きと表れているさま。",
-    "慢心（まんしん）": "自慢していい気味になること。おごり高ぶること。",
-    "奔放（ほんぽう）": "常識や慣習にとらわれず思うままにふるまうこと。",
-    "放漫（ほうまん）": "しまりがなくいい加減。",
-    "弁駁（べんばく）": "他人の説の誤りを攻撃していい破ること。論じて攻撃すること。",
-    "服従（ふくじゅう）": "命令をよく聞いて、素直に従うこと。",
-    "符号（ふごう）": "完全に一致すること。",
-    "敷衍（ふえん）": "言葉を加えたり言い換えたりしてわかりやすく説明する。",
-    "標榜（ひょうぼう）": "主張主義などを公然にあらわす。",
-    "謬見（びゅうけん）": "間違った考えや見解。",
-    "逼迫（ひっぱく）": "行き詰まって余裕がなくなること。",
-    "罷免（ひめん）": "職を辞めさせること。",
-    "披瀝（ひれき）": "心の中を包み隠さず、打ち明けること。",
-    "卑下（ひげ）": "自分をあえて低い位置に引き下げてへりくだること。",
-    "反正（はんせい）": "正しい状態に返すこと。",
-    "抜き差しならない": "動きが取れない。",
-    "背反（はいはん）": "道理に背くこと。背くこと。",
-    "馬耳東風（ばじとうふう）": "他人の意見や批評に注意を払わず聞き流すこと。",
-    "能弁（のうべん）": "上手に話すこと。",
-    "年鑑（ねんかん）": "ある分野の1年の出来事。",
-    "忍従（にんじゅう）": "耐え忍んで、言われるがままに従うこと。",
-    "頭を垂れる（こうべをたれる）": "へりくだって謙虚になる。",
-    "透徹（とうてつ）": "澄んで濁りのないこと。",
-    "徒食（としょく）": "働かないで遊び暮らすこと。",
-    "吐露（とろ）": "心の中を包み隠さずに打ち明けること。",
-    "直言（ちょくげん）": "自分の考えを遠慮せずいうこと。",
-    "胆勇（たんゆう）": "物に動じない勇気がある。",
-    "打診（だしん）": "相手の意向を確かめるために様子を見ること。",
-    "泰然（たいぜん）": "落ち着いていて物事に驚かないさま。物事に動じないさま。",
-    "崇高（すうこう）": "気高く尊いこと。",
-    "闊達（かったつ）": "度量が大きく物事にこだわらず心のまま行動する。",
-    "更迭（こうてつ）": "職や地位についている人を替えること。",
-    "早晩（そうばん）": "遅かれ早かれ、いずれいつかは。",
-    "昵懇（じっこん）": "親しくつきあう間柄。",
-    "漸進（ぜんしん）": "順を追って少しずつ進んで行くこと。",
-    "拮抗（きっこう）": "力が等しく互いに張り合うこと。",
-    "器量（きりょう）": "物の役に立つべき才能と徳。",
-    "漸次（ぜんじ）": "次第に、だんだん。",
-    "吹聴（ふいちょう）": "あちこち言いふらすこと。自分の手柄を言いふらす。",
-    "趨勢（すうせい）": "物事のこれからの動向。ある方向へと行く勢い。",
-    "消長（しょうちょう）": "勢いが盛んになったり衰えたりすること。",
-    "折衷（せっちゅう）": "いいところをとって一つに合わせること。",
-    "感服（かんぷく）": "深く感心して尊敬の気持ちを抱くこと。",
-    "至言（しげん）": "いかにも正しいところを言い当てた言葉。",
-    "老成（ろうせい）": "経験を積んで熟達すること。",
-    "凋落（ちょうらく）": "衰えること、落ちぶれること。",
-    "照準（しょうじゅん）": "狙いを定める。",
-    "恣意（しい）": "自分の思うまま、思いついたままの考え。",
-    "推敲（すいこう）": "詩文の字句や文章を十分に吟味して練りなおすこと。",
-    "端緒（たんしょ）": "物事の始まり、手がかり。",
-    "卑近（ひきん）": "身近でありふれていること。",
-    "伝播（でんぱ）": "広く伝わること。",
-    "焦眉（しょうび）": "危険が迫っていること、差し迫った状況にあること。",
-    "生粋（きっすい）": "純粋で混ざり気のないこと。",
-    "佳境（かきょう）": "興味を感じさせる場面、景色のよい所。",
-    "斯界（しかい）": "その道を専門とする社会。",
-    "粉飾（ふんしょょく）": "うわべをとりつくろって立派に見せかけること。",
-    "適宜（てきぎ）": "状況によく合っていること、便宜に従うこと。",
-    "頓挫（とんざ）": "勢いが急に弱まること、計画などが途中で遂行できなくなること。",
-    "宥和（ゆうわ）": "対立する相手を寛大に扱って、仲よくすること。",
-    "寡聞（かぶん）": "見聞が狭く浅いこと。",
-    "比肩（ひけん）": "肩を並べること。",
-    "流転（るてん）": "絶えず移り変わること。",
-    "銘記（めいき）": "しっかり心に刻み込み忘れないこと。",
-    "督励（とくりい）": "監督して激励すること。",
-    "少（かしょう）": "非常に少ないこと。",
-    "過分（かぶん）": "程度や限度を超えたさま。",
-    "変節（へんせつ）": "それまでの主義や信念を変えること。",
-    "健気（けなげ）": "心がけや態度がしっかりしている様。",
-    "閨秀（けいしゅう）": "学問や芸術などに優れた女性。",
-    "汗顔（かんがん）": "恥じて顔に汗をかくこと。",
-    "達観（たっかん）": "物事の本質を見通すこと。",
-    "新鋭（しんえい）": "新しく現れてきて勢いが鋭いこと。",
-    "多寡（たか）": "多いことと少ないこと。"
-};
+// (101語のデータオブジェクト内蔵)
+const spiData = { "宮々（えいえい）": "せっせと休みなく励むこと。", "重畳（ちょうじょう）": "大変喜ばしいこと。良いことが重なること。", "溜飲（りゅういん）": "胃の不調による胸焼け。不満が解消されて気が晴れること。", "言質（げんち）": "のちの証拠となる言葉。約束の言葉。", "気鋭（きえい）": "気力があって、意気込みが鋭いこと。", "腐心（ふしん）": "心を悩ますこと。ひどく心を使うこと。", "鳥瞰（ちょうかん）": "高い所から広い範囲を見下ろし眺めること。全体を一目で観察すること。", "肝要（かんよう）": "非常に大切なこと。最も必要なこと。", "協議（きょうぎ）": "集まって相談すること。", "専横（せんおう）": "わがままで横暴な振る舞い・態度。好き勝手に振る舞うこと。", "遁走（とんそう）": "逃げ出すこと。逃げ去ること。", "暁通（ぎょうつう）": "よく知っていること。精通していること。", "軋轢（あつれき）": "仲が悪くなること。あい争うこと。", "気概（きがい）": "困難にくじけない強い意志・気性。", "度量（どりょう）": "心の広さ。度量が広く小事にこだわらないさま。", "英断（えいだん）": "きっぱりと事を決めること。優れた決断。", "機知（きち）": "その場に応じて、とっさに適切な発言ができるような鋭い才知。", "断腸（だんちょう）": "はらわたがちぎれるほど、悲しくつらいこと。", "懐柔（かいじゅう）": "相手を手なずけるなどして、自分の思い通りに事を運ぶこと。", "至言（しげん）": "事物の本質を適切に言い当てている言葉。いかもし正しい言葉。", "懸案（けんあん）": "長らく解決しないままとなっている問題。", "粗忽（そこつ）": "軽はずみなこと。不注意なために引き起こしたあやまち。", "一瞥（いちべつ）": "ちらっと見ること。ちょっとだけ見ること。", "進取（しんしゅ）": "みずから進んで物事に取り組むこと。自ら進んでなすこと。", "薫陶（くんとう）": "徳の力で人を感化し、教育すること。", "委細（いさい）": "細かく詳しいこと。", "詭弁（きべん）": "道理に合わないことを強引に正当化しようとする弁論。こじつけ・ごまかしの議論。", "克明（こくめい）": "細かいところまで念を入れて手落ちのないこと。まじめで正直なこと。", "大綱（おおづな）": "ある事柄の根本となるもの。大づかみにとらえた内容。", "齟齬（そご）": "物事がうまくかみ合わないこと。食い違うこと。", "邂逅（かいこう）": "思いがけなく会うこと。", "逡巡（しゅんじゅん）": "決断をためらうこと。", "諫言（かんげん）": "目上の者をいさめること。", "箴言（しんげん）": "戒めの言葉。教訓。", "狡猾（こうかつ）": "悪賢いこと。", "桎梏（しっこく）": "手かせ足かせ。人の行動を厳しく制限して自由を束縛するもの。", "昵懇（じっこん）": "間柄が親しいこと。親しくつきあう間柄。", "揶揄（やゆ）": "からかうこと。", "慟哭（どうこく）": "声を上げて激しく泣くこと。", "已然（いぜん）": "すでに起こっていること。", "奸智（かんち）": "ずる賢い知恵。", "阿責（かしゃく）": "叱り責めること。責め苛むこと。", "僭越（せんえつ）": "自分の身分や立場を超えて出過ぎたことをすること。", "僥倖（ぎょうこう）": "思いがけない幸運。", "傀儡（かいらい）": "操り人形。人の手先で使われる人。", "論う（あげつらう）": "些細な非などを取り立てて大げさに言う。", "憐憫（れんびん）": "不憫に思うこと。憐みの気持ち。", "廉価（れんか）": "安いこと。価格が安いさま。", "励行（れいこう）": "努力してそうする。約束や決めを破らぬよう努める。", "領袖（りょうしゅう）": "集団におけるリーダー。集団のかしら、人を率いる長。", "落成（らくせい）": "建築物が出来上がること。", "落伍（らくご）": "仲間・集団の列から遅れること。集団から遅れてついていけなくなること。", "来歴（らいれき）": "物事のこれまでの次第。", "雄飛（ゆうひ）": "勢い盛んに活動すること。活躍すること。", "悠然（ゆうぜん）": "落ち着いていて、少しもあわてないさま。", "躍如（やくじょ）": "生き生きと表れているさま。", "慢心（まんしん）": "自慢していい気味になること。おごり高ぶること。", "奔放（ほんぽう）": "常識や慣習にとらわれず思うままにふるまうこと。", "放漫（ほうまん）": "しまりがなくいい加減。", "弁駁（べんばく）": "他人の説の誤りを攻撃していい破ること。論じて攻撃すること。", "服従（ふくじゅう）": "命令をよく聞いて、素直に従うこと。", "符号（ふごう）": "完全に一致すること。", "敷衍（ふえん）": "言葉を加えたり言い換えたりしてわかりやすく説明する。", "標榜（ひょうぼう）": "主張主義などを公然にあらわす。", "謬見（びゅうけん）": "間違った考えや見解。", "逼迫（ひっぱく）": "行き詰まって余裕がなくなること。", "罷免（ひめん）": "職を辞めさせること。", "披瀝（ひれき）": "心の中を包み隠さず、打ち明けること。", "卑下（ひげ）": "自分をあえて低い位置に引き下げてへりくだること。", "反正（はんせい）": "正しい状態に返すこと。", "抜き差しならない": "動きが取れない。", "背反（はいはん）": "道理に背くこと。背くこと。", "馬耳東風（ばじとうふう）": "他人の意見や批評に注意を払わず聞き流すこと。", "能弁（のうべん）": "上手に話すこと。", "年鑑（ねんかん）": "ある分野の1年の出来事。", "忍従（にんじゅう）": "耐え忍んで、言われるがままに従うこと。", "頭を垂れる（こうべをたれる）": "へりくだって謙虚になる。", "透徹（とうてつ）": "澄んで濁りのないこと。", "徒食（としょく）": "働かないで遊び暮らすこと。", "吐露（とろ）": "心の中を包み隠さずに打ち明けること。", "直言（ちょくげん）": "自分の考えを遠慮せずいうこと。", "胆勇（たんゆう）": "物に動じない勇気がある。", "打診（だしん）": "相手の意向を確かめるために様子を見ること。", "泰然（たいぜん）": "落ち着いていて物事に驚かないさま。物事に動じないさま。", "崇高（すうこう）": "気高く尊いこと。", "闊達（かったつ）": "度量が大きく物事にこだわらず心のまま行動する。", "更迭（こうてつ）": "職や地位についている人を替えること。", "早晩（そうばん）": "遅かれ早かれ、いずれいつかは。", "昵懇（じっこん）": "親しくつきあう間柄。", "漸進（ぜんしん）": "順を追って少しずつ進んで行くこと。", "拮抗（きっこう）": "力が等しく互いに張り合うこと。", "器量（きりょう）": "物の役に立つべき才能と徳。", "漸次（ぜんじ）": "次第に、だんだん。", "吹聴（ふいちょう）": "あちこち言いふらすこと。自分の手柄を言いふらす。", "趨勢（すうせい）": "物事のこれからの動向。ある方向へと行く勢い。", "消長（しょうちょう）": "勢いが盛んになったり衰えたりすること。", "折衷（せっちゅう）": "いいところをとって一つに合わせること。", "感服（かんぷく）": "深く感心して尊敬の気持ちを抱くこと。", "至言（しげん）": "いかにも正しいところを言い当てた言葉。", "老成（ろうせい）": "経験を積んで熟達すること。", "凋落（ちょうらく）": "衰えること、落ちぶれること。", "照準（しょうじゅん）": "狙いを定める。", "恣意（しい）": "自分の思うまま、思いついたままの考え。", "推敲（すいこう）": "詩文の字句や文章を十分に吟味して練りなおすこと。", "端緒（たんしょ）": "物事の始まり、手がかり。", "卑近（ひきん）": "身近でありふれていること。", "伝播（でんぱ）": "広く伝わること。", "焦眉（しょうび）": "危険が迫っていること、差し迫った状況にあること。", "生粋（きっすい）": "純粋で混ざり気のないこと。", "佳境（かきょう）": "興味を感じさせる場面、景色のよい所。", "斯界（しかい）": "その道を専門とする社会。", "粉飾（ふんしょく）": "うわべをとりつくろって立派に見せかけること。", "適宜（てきぎ）": "状況によく合っていること、便宜に従うこと。", "頓挫（とんざ）": "勢いが急に弱まること、計画などが途中で遂行できなくなること。", "宥和（ゆうわ）": "対立する相手を寛大に扱って、仲よくすること。", "寡聞（かぶん）": "見聞が狭く浅いこと。", "比肩（ひけん）": "肩を並べること。", "流転（るてん）": "絶えず移り変わること。", "銘記（めいき）": "しっかり心に刻み込み忘れないこと。", "督励（とくりい）": "監督して激励すること。", "少（かしょう）": "非常に少ないこと。", "過分（かぶん）": "程度や限度を超えたさま。", "変節（へんせつ）": "それまでの主義や信念を変えること。", "健気（けなげ）": "心がけや態度がしっかりしている様。", "閨秀（けいしゅう）": "学問や芸術などに優れた女性。", "汗顔（かんがん）": "恥じて顔に汗をかくこと。", "達観（たっかん）": "物事の本質を見通すこと。", "新鋭（しんえい）": "新しく現れてきて勢いが鋭いこと。", "多寡（たか）": "多いことと少ないこと。" };
+
 let wrongAnswers = JSON.parse(localStorage.getItem('spi_app_save_data')) || [];
 let currentCorrectWord = "";
 
 let totalQuestions = 10;  
 let currentQuestionNum = 0; 
-let isReviewMode = false; // 💡 復習モードがONかどうかのフラグ
+let isReviewMode = false;
+let quizPool = []; 
+let correctCount = 0; 
 
-// アプリ起動時にスタート画面のストック数を更新
 document.getElementById("start-stock-count").innerText = wrongAnswers.length;
 
 function startQuiz() {
     const selectEl = document.getElementById("quiz-mode-select");
     const modeValue = selectEl.value;
-    const allWordsCount = Object.keys(spiData).length;
+    const allWords = Object.keys(spiData);
     
-    // 💡 変更点：選ばれた選択肢によってモードと問題数を切り替える
+    correctCount = 0; 
+    currentQuestionNum = 0; 
+    
     if (modeValue === "review") {
         if (wrongAnswers.length === 0) {
-            alert("チェックがついている問題がまだありません！");
-            return; // 処理を中断してスタート画面に留まる
+            alert("チェックがついている問題がまだありません！10問モードから遊んでみてね。");
+            return;
         }
         isReviewMode = true;
-        totalQuestions = wrongAnswers.length; // チェックされている全数を解く
+        totalQuestions = wrongAnswers.length;
+        quizPool = [...wrongAnswers].sort(() => 0.5 - Math.random());
     } else {
         isReviewMode = false;
         totalQuestions = parseInt(modeValue);
         
-        // データがまだ足りない場合は、持っているデータの最大数に合わせる（バグ防止）
-        if (totalQuestions > allWordsCount) {
-            totalQuestions = allWordsCount;
+        if (totalQuestions > allWords.length) {
+            totalQuestions = allWords.length;
         }
+        quizPool = allWords.sort(() => 0.5 - Math.random()).slice(0, totalQuestions);
     }
 
-    currentQuestionNum = 0; 
-    
     document.getElementById("start-screen").classList.remove("active");
     document.getElementById("quiz-screen").classList.add("active");
     
@@ -248,24 +142,14 @@ function loadQuiz() {
     currentQuestionNum++;
     document.getElementById("progress").innerText = `第 ${currentQuestionNum} / ${totalQuestions} 問`;
 
-    const allWords = Object.keys(spiData);
-    let targetWords = [];
-
-    // スタート画面の選択に基づいたリストから出題
-    if (isReviewMode) {
-        targetWords = wrongAnswers;
-    } else {
-        targetWords = allWords;
-    }
-    
-    currentCorrectWord = targetWords[Math.floor(Math.random() * targetWords.length)];
+    currentCorrectWord = quizPool[currentQuestionNum - 1];
     const questionText = spiData[currentCorrectWord];
     
     document.getElementById("question").innerText = `『 ${questionText} 』`;
     
     updateBookmarkButton();
     
-    // 4択ボタンの作成（ダミーは全体の単語から持ってくる）
+    const allWords = Object.keys(spiData);
     const wrongWords = allWords.filter(w => w !== currentCorrectWord);
     const shuffledWrong = wrongWords.sort(() => 0.5 - Math.random());
     const choices = shuffledWrong.slice(0, 3);
@@ -296,6 +180,7 @@ function checkAnswer(selected) {
     if (selected === currentCorrectWord) {
         resultDiv.className = "result correct";
         resultDiv.innerText = "🎉 正解！お見事です！";
+        correctCount++; 
     } else {
         resultDiv.className = "result incorrect";
         resultDiv.innerText = `❌ 不正解... 正解は「${currentCorrectWord}」でした！`;
@@ -309,7 +194,7 @@ function checkAnswer(selected) {
     
     const nextBtn = document.getElementById("next-btn");
     if (currentQuestionNum >= totalQuestions) {
-        nextBtn.innerText = "🏁 終了！スタート画面に戻る";
+        nextBtn.innerText = "🏁 テスト終了！結果を見る";
     } else {
         nextBtn.innerText = "次の問題へ";
     }
@@ -318,13 +203,40 @@ function checkAnswer(selected) {
 
 function nextQuestion() {
     if (currentQuestionNum >= totalQuestions) {
-        // 終了時に、最新のストック数をスタート画面に反映させて戻る
-        document.getElementById("start-stock-count").innerText = wrongAnswers.length;
         document.getElementById("quiz-screen").classList.remove("active");
-        document.getElementById("start-screen").classList.add("active");
+        document.getElementById("result-screen").classList.add("active");
+        document.getElementById("final-score").innerText = `${correctCount} / ${totalQuestions} 問`;
+        
+        const rate = correctCount / totalQuestions;
+        let comment = "お疲れ様でした！次も頑張りましょう！";
+        if (rate === 1) comment = "🥇 完璧！全問正解！素晴らしいです！";
+        else if (rate >= 0.7) comment = "✨ すごい！その調子で合格を掴みましょう！";
+        document.getElementById("score-comment").innerText = comment;
     } else {
         loadQuiz();
     }
+}
+
+// 💡 変更点：途中でやめるボタンを押した時のリセット＆画面切り替え処理
+function quitQuiz() {
+    // 誤操作防止のために確認アラートを出す（JavaScript標準の確認ダイアログ）
+    if (confirm("本当に途中でテストをやめて、最初の画面に戻りますか？")) {
+        // カウンターやプールをクリア
+        currentQuestionNum = 0;
+        correctCount = 0;
+        quizPool = [];
+        
+        // スタート画面の残りストック数を最新にして戻る
+        document.getElementById("start-stock-count").innerText = wrongAnswers.length;
+        document.getElementById("quiz-screen").classList.remove("active");
+        document.getElementById("start-screen").classList.add("active");
+    }
+}
+
+function goToStart() {
+    document.getElementById("start-stock-count").innerText = wrongAnswers.length;
+    document.getElementById("result-screen").classList.remove("active");
+    document.getElementById("start-screen").classList.add("active");
 }
 
 function toggleBookmark() {
